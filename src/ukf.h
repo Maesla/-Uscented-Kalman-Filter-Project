@@ -67,6 +67,9 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  MatrixXd Q_;
+
+  int count = 0;
 
   /**
    * Constructor
@@ -90,6 +93,18 @@ public:
    * @param delta_t Time between k and k+1 in s
    */
   void Prediction(double delta_t);
+
+  MatrixXd GenerateAugmentedSigmaPoints();
+
+  void PredictAugmentedSigmaPoints(MatrixXd augmentedSigmaPoints, float dt);
+  VectorXd PredictAugmentedSigmaPoint(VectorXd xsig_pred_col, float dt);
+
+  void PredictMeanAndCovariance();
+  VectorXd SubstractAndKeepAngleNormalized(VectorXd a, VectorXd b, int indexOfAngle);
+
+
+
+
 
   /**
    * Updates the state and the state covariance matrix using a laser measurement
