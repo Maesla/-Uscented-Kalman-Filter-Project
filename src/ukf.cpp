@@ -262,16 +262,19 @@ void UKF::PredictMeanAndCovariance(){
     P_.fill(0.0);
     for (int i = 0; i < augmented_columns; i++)
     {
-      VectorXd aux = SubstractAndKeepAngleNormalized(Xsig_pred_.col(i), x_, 3);
+      VectorXd aux = SubstractAndKeepAngleNormalizedIfNecessary(Xsig_pred_.col(i), x_, 3);
       P_ = P_ + weights_[i]*aux*aux.transpose();
     }
 
 }
 
-VectorXd UKF::SubstractAndKeepAngleNormalized(VectorXd a, VectorXd b, int indexOfAngle){
+VectorXd UKF::SubstractAndKeepAngleNormalizedIfNecessary(VectorXd a, VectorXd b, int indexOfAngle){
   VectorXd aux = a - b;
-  while (aux(indexOfAngle)> M_PI) aux(indexOfAngle)-=2.*M_PI;
-  while (aux(indexOfAngle)<-M_PI) aux(indexOfAngle)+=2.*M_PI;
+  if (indexOfAngle != -1)
+  {
+    while (aux(indexOfAngle)> M_PI) aux(indexOfAngle)-=2.*M_PI;
+    while (aux(indexOfAngle)<-M_PI) aux(indexOfAngle)+=2.*M_PI;
+  }
 
   return aux;
 }
@@ -288,6 +291,20 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the lidar NIS.
   */
+
+  MatrixXd Zsig = PredictLidar();
+
+  int n_z = 2;
+  VectorXd z = VectorXd::Zero(n_z);
+  float px = meas_package.raw_measurements_[0];
+  float py = meas_package.raw_measurements_[1];
+  z << px, py;
+
+  UpdateState(z, Zsig, R_lidar, -1);
+}
+
+MatrixXd UKF::PredictLidar()
+{
   int n_z = 2;
 
   //create matrix for sigma points in measurement space
@@ -302,51 +319,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     Zsig(1,i) = py;
   }
 
-  //mean predicted measurement
-  VectorXd z_pred = VectorXd::Zero(n_z);
-  for(int i = 0; i < augmented_columns; i++)
-  {
-    z_pred = z_pred + weights_[i]*Zsig.col(i);
-  }
-
-  //measurement covariance matrix S
-  MatrixXd S = MatrixXd::Zero(n_z, n_z);
-  for(int i = 0; i < augmented_columns; i++)
-  {
-    VectorXd aux = SubstractAndKeepAngleNormalized(Zsig.col(i), z_pred, 1);
-    S = S + weights_[i]*aux*aux.transpose();
-  }
-
-  S = S + R_lidar;
-
-  // Update State
-  MatrixXd Tc = MatrixXd::Zero(n_x_, n_z);
-
-  for(int i = 0; i < augmented_columns; i++)
-  {
-
-    VectorXd z_diff = Zsig.col(i) - z_pred;
-
-    VectorXd x_diff = SubstractAndKeepAngleNormalized(Xsig_pred_.col(i), x_, 3);
-
-    Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
-  }
-
-  //calculate Kalman gain K;
-  MatrixXd K = Tc*S.inverse();
-
-
-  VectorXd z = VectorXd::Zero(n_z);
-  float px = meas_package.raw_measurements_[0];
-  float py = meas_package.raw_measurements_[1];
-  z << px, py;
-
-
-  //update state mean and covariance matrix
-  VectorXd z_diff = z - z_pred;
-
-  x_ = x_ + K*z_diff;
-  P_ = P_ - K*S*K.transpose();
+  return Zsig;
 }
 
 /**
@@ -354,15 +327,19 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
-  /**
-  TODO:
+  MatrixXd Zsig = PredictRadar();
 
-  Complete this function! Use radar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
+  int n_z = 3;
+  VectorXd z = VectorXd::Zero(n_z);
+  z(0) = meas_package.raw_measurements_[0];
+  z(1) = meas_package.raw_measurements_[1];
+  z(2) = meas_package.raw_measurements_[2];
 
-  You'll also need to calculate the radar NIS.
-  */
+  UpdateState(z, Zsig, R_radar, 1);
+}
 
+MatrixXd UKF::PredictRadar()
+{
   int n_z = 3;
   //create matrix for sigma points in measurement space
   MatrixXd Zsig = MatrixXd::Zero(n_z, augmented_columns);
@@ -391,53 +368,51 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     Zsig(2,i) = rho_rate;
   }
 
+  return Zsig;
+
+}
+
+void UKF::UpdateState(VectorXd z, MatrixXd Zsig, MatrixXd R, int indexToNormalizeInZ)
+{
+  int n_z = z.size();
+  //mean predicted measurement
   VectorXd z_pred = VectorXd::Zero(n_z);
   for(int i = 0; i < augmented_columns; i++)
   {
     z_pred = z_pred + weights_[i]*Zsig.col(i);
   }
 
-  MatrixXd S = MatrixXd::Zero(n_z,n_z);
+  //measurement covariance matrix S
+  MatrixXd S = MatrixXd::Zero(n_z, n_z);
   for(int i = 0; i < augmented_columns; i++)
   {
-    VectorXd aux = SubstractAndKeepAngleNormalized(Zsig.col(i), z_pred, 1);
+    //VectorXd aux = Zsig.col(i) - z_pred;
+    VectorXd aux = SubstractAndKeepAngleNormalizedIfNecessary(Zsig.col(i), z_pred, indexToNormalizeInZ);
     S = S + weights_[i]*aux*aux.transpose();
   }
 
-  S = S + R_radar;
+  S = S + R;
 
-  //Update Asigment
-
-  //create matrix for cross correlation Tc
+  // Update State
   MatrixXd Tc = MatrixXd::Zero(n_x_, n_z);
-
 
   for(int i = 0; i < augmented_columns; i++)
   {
 
-    VectorXd z_diff = SubstractAndKeepAngleNormalized(Zsig.col(i), z_pred, 1);
+    //VectorXd z_diff = Zsig.col(i) - z_pred;
+    VectorXd z_diff = SubstractAndKeepAngleNormalizedIfNecessary(Zsig.col(i), z_pred, indexToNormalizeInZ);
 
-    VectorXd x_diff = SubstractAndKeepAngleNormalized(Xsig_pred_.col(i),x_,3);
+    VectorXd x_diff = SubstractAndKeepAngleNormalizedIfNecessary(Xsig_pred_.col(i), x_, 3);
 
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
 
-
   //calculate Kalman gain K;
   MatrixXd K = Tc*S.inverse();
 
-  VectorXd z = VectorXd::Zero(n_z);
-  z(0) = meas_package.raw_measurements_[0];
-  z(1) = meas_package.raw_measurements_[1];
-  z(2) = meas_package.raw_measurements_[2];
-
 
   //update state mean and covariance matrix
-  //VectorXd z_diff = z - z_pred;
-  VectorXd z_diff = SubstractAndKeepAngleNormalized(z,z_pred, 1);
-
-  //while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-  //while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
+  VectorXd z_diff = z - z_pred;
 
   x_ = x_ + K*z_diff;
   P_ = P_ - K*S*K.transpose();
