@@ -327,10 +327,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
     VectorXd z_diff = Zsig.col(i) - z_pred;
 
-    VectorXd x_diff = Xsig_pred_.col(i) - x_;
-    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
-    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
-
+    VectorXd x_diff = SubstractAndKeepAngleNormalized(Xsig_pred_.col(i), x_, 3);
 
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
@@ -418,13 +415,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   for(int i = 0; i < augmented_columns; i++)
   {
 
-    VectorXd z_diff = Zsig.col(i) - z_pred;
-    while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-    while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
+    VectorXd z_diff = SubstractAndKeepAngleNormalized(Zsig.col(i), z_pred, 1);
 
-    VectorXd x_diff = Xsig_pred_.col(i) - x_;
-    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
-    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
+    VectorXd x_diff = SubstractAndKeepAngleNormalized(Xsig_pred_.col(i),x_,3);
 
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
@@ -440,9 +433,11 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
 
   //update state mean and covariance matrix
-  VectorXd z_diff = z - z_pred;
-  while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-  while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
+  //VectorXd z_diff = z - z_pred;
+  VectorXd z_diff = SubstractAndKeepAngleNormalized(z,z_pred, 1);
+
+  //while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
+  //while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
 
   x_ = x_ + K*z_diff;
   P_ = P_ - K*S*K.transpose();
