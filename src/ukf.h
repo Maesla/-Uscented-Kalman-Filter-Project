@@ -63,14 +63,18 @@ public:
 
   ///* Augmented state dimension
   int n_aug_;
+  int augmented_columns;
 
   ///* Sigma point spreading parameter
   double lambda_;
 
   MatrixXd Q_;
 
-  int count = 0;
+  MatrixXd R_lidar;
+  MatrixXd R_radar;
 
+  float nis_lidar;
+  float nis_radar;
   /**
    * Constructor
    */
@@ -100,10 +104,12 @@ public:
   VectorXd PredictAugmentedSigmaPoint(VectorXd xsig_pred_col, float dt);
 
   void PredictMeanAndCovariance();
-  VectorXd SubstractAndKeepAngleNormalized(VectorXd a, VectorXd b, int indexOfAngle);
+  VectorXd SubstractAndKeepAngleNormalizedIfNecessary(VectorXd a, VectorXd b, int indexOfAngle);
 
+  MatrixXd PredictLidar();
+  MatrixXd PredictRadar();
 
-
+  float UpdateState(VectorXd z, MatrixXd Zsig, MatrixXd R, int indexToNormalizeInZ);
 
 
   /**

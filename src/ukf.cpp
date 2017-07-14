@@ -24,10 +24,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30;
+  std_a_ = 3;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 30;
+  std_yawdd_ = M_PI/4.0;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -300,7 +300,8 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   float py = meas_package.raw_measurements_[1];
   z << px, py;
 
-  UpdateState(z, Zsig, R_lidar, -1);
+  nis_lidar = UpdateState(z, Zsig, R_lidar, -1);
+  //cout << nis_lidar << endl;
 }
 
 MatrixXd UKF::PredictLidar()
@@ -335,7 +336,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   z(1) = meas_package.raw_measurements_[1];
   z(2) = meas_package.raw_measurements_[2];
 
-  UpdateState(z, Zsig, R_radar, 1);
+  nis_radar = UpdateState(z, Zsig, R_radar, 1);
+  //cout << nis_radar << endl;
+
 }
 
 MatrixXd UKF::PredictRadar()
@@ -372,7 +375,7 @@ MatrixXd UKF::PredictRadar()
 
 }
 
-void UKF::UpdateState(VectorXd z, MatrixXd Zsig, MatrixXd R, int indexToNormalizeInZ)
+float UKF::UpdateState(VectorXd z, MatrixXd Zsig, MatrixXd R, int indexToNormalizeInZ)
 {
   int n_z = z.size();
   //mean predicted measurement
@@ -416,4 +419,6 @@ void UKF::UpdateState(VectorXd z, MatrixXd Zsig, MatrixXd R, int indexToNormaliz
 
   x_ = x_ + K*z_diff;
   P_ = P_ - K*S*K.transpose();
+
+  return z_diff.transpose()*S.inverse()*z_diff;
 }
